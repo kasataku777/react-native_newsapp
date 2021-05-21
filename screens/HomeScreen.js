@@ -1,9 +1,11 @@
 
-import React, {useState,useEffect} from 'react';
-import { StyleSheet, FlatList, View ,SafeAreaView} from 'react-native';
+import React, {useState,useEffect,useRef} from 'react';
+import { StyleSheet, FlatList, View ,SafeAreaView,RefreshControl} from 'react-native';
 import ListItem from '../components/ListItem';
 import Constants from 'expo-constants';
 import axios from 'axios';
+import Loading from '../components/Loading';
+
 
 
 const URL = `https://newsapi.org/v2/top-headlines?country=jp&category=business&apiKey=${Constants.manifest.extra.newsApiKey}`;
@@ -40,21 +42,51 @@ const styles = StyleSheet.create({
 });
 
 
-export default HomeScreen =()=> {
+export default HomeScreen =(props)=> {
 
+    const {navigation} = props;
   const [articles,setArticles] = useState([]);
+  const [loading,setLoading] = useState(false);
+  const [refreshing,setRefreshing] = useState(false);
+
+  const pageRef = useRef(1);
+  const fetchedAllRef = useRef(false);
+
   useEffect(()=> {
-  fetchArticles();
+    setLoading(true);
+  fetchArticles(1);
+  setLoading(false);
 },[]);
 
-const fetchArticles = async () => {
-  try{
-    const response = await axios.get(URL);
-    setArticles(response.data.articles);
+const fetchArticles = async (page) => {
 
+  try{
+    const response = await axios.get(`${URL}&page=${page}`);
+    if(response.data.articles.length > 0){
+    setArticles((prevArticles) => [...prevArticles, ...response.data.articles]);
+
+    }else{
+      fetchedAllRef.current=true;
+    }
   }catch(error){
     console.error(error);
   }
+
+}
+
+const onEndReached= ()=>{
+  if(!fetchedAllRef.current){
+  pageRef.current=pageRef.current+1;
+fetchArticles(pageRef.current);}
+
+}
+const onRefresh =async()=>{
+  setRefreshing(true)
+  setArticles([])
+  pageRef.current=1
+  fetchedAllRef.current=false;
+  await fetchArticles(1)
+  setRefreshing(false)
 }
   return (
     <SafeAreaView style={styles.container}>
@@ -65,10 +97,18 @@ const fetchArticles = async () => {
           imageUrl={item.urlToImage}
       title={item.title}
       author={item.author}
+      onPress={()=>navigation.navigate('Article',{article: item})}
           />
         )}
         keyExtractor={(item,index)=>index.toString()}
+        onEndReached={onEndReached}
+        refreshControl={
+          <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}/>
+        }
       />
+      {loading &&<Loading/>}
     </SafeAreaView>
   );
 }
